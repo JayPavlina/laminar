@@ -162,6 +162,26 @@ impl Socket {
         }
     }
 
+    /// It is just like manual_poll but it only sends and only sends the first packet
+    pub fn manual_poll_now_receive_once(&mut self) {
+        let time = Instant::now();
+        // Now grab all the packets waiting to be sent and send them
+        if let Ok(p) = self.packet_receiver.try_recv() {
+            if let Err(e) = self.send_to(p, time) {
+                match e {
+                    ErrorKind::IOError(ref e) if e.kind() == io::ErrorKind::WouldBlock => {}
+                    _ => error!("There was an error sending packet: {:?}", e),
+                }
+            }
+
+            // Finally check for idle clients
+            if let Err(e) = self.handle_idle_clients(time) {
+                error!("Encountered an error when sending TimeoutEvent: {:?}", e);
+            }
+        }
+
+    }
+
     /// Set the link conditioner for this socket. See [LinkConditioner] for further details.
     pub fn set_link_conditioner(&mut self, link_conditioner: Option<LinkConditioner>) {
         self.link_conditioner = link_conditioner;
